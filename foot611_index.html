@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Ankle Dorsi/Plantar Flexion Counter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<style>
+/* ===== BASE ===== */
+body{
+  margin:0;
+  background:#fff;
+  color:#000;
+  font-family:system-ui, sans-serif;
+}
+#title{ padding:6px; font-weight:bold; }
+#countNow{ font-size:24px; padding:6px; }
+#video{
+  width:100vw;
+  height:60vh;
+  object-fit:cover;
+  background:#000;
+}
+#videoWrapper{
+  position:relative;
+  width:100%;
+  height:60vh;
+  overflow:hidden;
+}
+#overlay{
+  position:absolute;
+  top:10px;
+  right:10px;
+  left:10px;
+  background:rgba(0,0,0,0.65);
+  color:#fff;
+  font-size:14px;
+  padding:6px 8px;
+  border-radius:8px;
+  min-height:36px;
+  display:none;
+  line-height:1.4;
+}
+#panel{
+  position:fixed;
+  bottom:0; left:0; right:0;
+  background:#f0f0f0;
+  border-top:1px solid #999;
+}
+button, select{
+  margin:4px;
+  padding:6px;
+}
+#status{
+  padding:4px 6px;
+  font-size:13px;
+  color:#111;
+}
+#hud{
+  display:none;
+  font-size:12px;
+  max-height:180px;
+  overflow:auto;
+  white-space:pre;
+  border-top:1px dashed #999;
+  padding:4px;
+}
+#intro{
+  padding:8px 10px;
+  background:#fff9f0;
+  border-bottom:1px solid #e0c080;
+  font-size:14px;
+  line-height:1.5;
+  margin-bottom:4px;
+}
+#intro ol{
+  margin:4px 0 0 18px;
+  padding:0;
+}
+#extraArea{
+  padding:6px;
+  font-size:13px;
+}
+#extraControls{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  margin-bottom:6px;
+}
+#extraControls>button,#extraControls>select{
+  padding:6px 10px;
+  border-radius:4px;
+  border:1px solid #999;
+  background:#fff;
+}
+#historyEditor{
+  padding:6px;
+  font-size:13px;
+  border-top:1px solid #d0d0d0;
+  background:#fffef8;
+}
+#historyEditor textarea{
+  width:100%;
+  min-height:120px;
+  border:1px solid #bbb;
+  border-radius:4px;
+  padding:6px;
+  font-family:monospace;
+  font-size:13px;
+  resize:vertical;
+}
+#historyEditor .editorActions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:6px;
+  flex-wrap:wrap;
+}
+#historyEditor button{
+  padding:6px 10px;
+  border-radius:4px;
+  border:1px solid #999;
+  background:#fff;
+}
+#historyChart{
+  width:100%;
+  max-width:100%;
+  border:1px solid #ccc;
+  background:#f9f9f9;
+}
+#graphMessage,#distanceMessage{
+  margin-top:4px;
+  color:#1a1a1a;
+}
+
+/* ===== RESULT SCREENS ===== */
+.result-screen{
+  display:none;
+  position:fixed;
+  top:0; left:0; right:0; bottom:0;
+  background:#fff;
+  z-index:100;
+  overflow-y:auto;
+  padding-bottom:80px;
+  box-sizing:border-box;
+}
+.result-header{
+  display:flex;
+  align-items:center;
+  padding:14px 16px 10px;
+  border-bottom:1px solid #e8e8e8;
+}
+.result-back{
+  background:none;
+  border:none;
+  font-size:22px;
+  color:#3a3a3a;
+  cursor:pointer;
+  padding:0 10px 0 0;
+  margin:0;
+  line-height:1;
+}
+.result-title{
+  font-size:18px;
+  font-weight:600;
+  color:#1a1a1a;
+}
+.result-footer{
+  position:fixed;
+  bottom:0; left:0; right:0;
+  padding:14px 20px;
+  background:#fff;
+  border-top:1px solid #e8e8e8;
+}
+.next-btn{
+  display:block;
+  width:100%;
+  padding:15px;
+  background:#2d6a4f;
+  color:#fff;
+  border:none;
+  border-radius:12px;
+  font-size:17px;
+  font-weight:600;
+  cursor:pointer;
+  letter-spacing:0.03em;
+}
+.next-btn:active{ background:#1b4332; }
+
+/* ===== SCREEN 1: REPETITIONS ===== */
+#screen-reps .reps-body{
+  padding:0 24px;
+}
+#screen-reps .gauge-wrap{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  margin:24px 0 8px;
+}
+#screen-reps .gauge-svg{
+  width:220px;
+  height:220px;
+}
+#screen-reps .keep-going{
+  text-align:center;
+  font-size:18px;
+  color:#3a3a3a;
+  font-weight:500;
+  margin:4px 0 0;
+}
+#screen-reps .gauge-foot-wrap{
+  position:relative;
+  width:100%;
+  display:flex;
+  justify-content:center;
+}
+#screen-reps .foot-area{
+  position:absolute;
+  bottom:-10px;
+  right:0;
+  opacity:0.45;
+  pointer-events:none;
+}
+#screen-reps .foot-area svg{
+  width:140px;
+  height:126px;
+}
+
+/* ===== SCREEN 2: CALENDAR ===== */
+#screen-cal .cal-body{
+  padding:0 20px;
+}
+#screen-cal .cal-month{
+  text-align:center;
+  font-size:20px;
+  font-weight:700;
+  margin:18px 0 14px;
+  color:#1a1a1a;
+}
+#screen-cal .cal-grid{
+  width:100%;
+  border-collapse:collapse;
+  margin-bottom:20px;
+}
+#screen-cal .cal-grid th{
+  text-align:center;
+  font-size:12px;
+  color:#888;
+  padding:4px 0 8px;
+  font-weight:500;
+}
+#screen-cal .cal-grid td{
+  text-align:center;
+  padding:4px 2px;
+  font-size:13px;
+  color:#555;
+  width:14.28%;
+}
+.cal-dot{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:#2d6a4f;
+  color:#fff;
+  font-size:13px;
+  font-weight:600;
+}
+.cal-today-dot{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:#1b4332;
+  color:#fff;
+  font-size:13px;
+  font-weight:700;
+  box-shadow:0 0 0 3px #95d5b2;
+}
+.cal-empty{
+  display:inline-block;
+  width:32px;
+  height:32px;
+  color:#ccc;
+  line-height:32px;
+}
+.cal-summary{
+  border-top:1px solid #e8e8e8;
+  padding-top:16px;
+  margin-top:4px;
+}
+.cal-summary-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  margin-bottom:10px;
+}
+.cal-summary-label{
+  font-size:15px;
+  color:#555;
+}
+.cal-summary-val{
+  font-size:22px;
+  font-weight:700;
+  color:#1a1a1a;
+}
+.cal-summary-unit{
+  font-size:14px;
+  font-weight:400;
+  color:#888;
+  margin-left:3px;
+}
+
+/* ===== SCREEN 3: TOKAIDO ===== */
+#screen-tokaido .tk-body{
+  padding:0 20px;
+}
+#screen-tokaido .tk-progress-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:20px 0 16px;
+}
+#screen-tokaido .tk-progress-label{
+  font-size:16px;
+  color:#555;
+}
+#screen-tokaido .tk-progress-val{
+  font-size:28px;
+  font-weight:700;
+  color:#1a1a1a;
+}
+#screen-tokaido .tk-progress-denom{
+  font-size:18px;
+  color:#888;
+}
+#screen-tokaido .tk-img-wrap{
+  width:100%;
+  border-radius:10px;
+  overflow:hidden;
+  margin-bottom:18px;
+  background:#f0ece6;
+  min-height:160px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#screen-tokaido .tk-img-wrap img{
+  width:100%;
+  display:block;
+}
+#screen-tokaido .tk-route-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+#screen-tokaido .tk-route-bar-wrap{
+  flex:1;
+  height:8px;
+  background:#e0e0e0;
+  border-radius:4px;
+  overflow:hidden;
+}
+#screen-tokaido .tk-route-bar-fill{
+  height:100%;
+  background:#2d6a4f;
+  border-radius:4px;
+  transition:width 0.6s ease;
+}
+#screen-tokaido .tk-route-label{
+  font-size:12px;
+  color:#888;
+  white-space:nowrap;
+}
+#screen-tokaido .tk-station-name{
+  font-size:15px;
+  color:#2d6a4f;
+  font-weight:600;
+  margin-bottom:4px;
+}
+#screen-tokaido .tk-distance-text{
+  font-size:13px;
+  color:#777;
+  line-height:1.5;
+}
+#screen-tokaido .tk-done-title{
+  text-align:center;
+  font-size:20px;
+  font-weight:700;
+  color:#2d6a4f;
+  margin:20px 0 8px;
+}
+.close-btn{
+  display:block;
+  width:100%;
+  padding:15px;
+  background:#e8f5e9;
+  color:#2d6a4f;
+  border:none;
+  border-radius:12px;
+  font-size:17px;
+  font-weight:600;
+  cursor:pointer;
+}
+.close-btn:active{ background:#c8e6c9; }
+</style>
+</head>
+
+<body>
+
+<!-- ===== MAIN APP (unchanged) ===== -->
+<div id="title">Ankle Dorsi/Plantar Flexion Counter / 足関節底背屈カウンター</div>
+<div id="countNow">Now: 0 / 現在: 0</div>
+<div id="intro">
+  <strong>このアプリは足関節の底背屈を促し、下腿部全体の健康を支援するよう設計されています。</strong>
+  <ol>
+    <li>足のむくみを軽減し、</li>
+    <li>「第二の心臓」と呼ばれる下腿筋を強化し、</li>
+    <li>左右交互のリズミカルな動作で脳の感覚・運動を協調させます。</li>
+  </ol>
+  １セット２０回を目安に、最大１日８００回まで挑戦してください。
+</div>
+
+<div id="videoWrapper">
+  <video id="video" autoplay muted playsinline></video>
+  <div id="overlay" aria-live="polite"></div>
+</div>
+
+<div id="panel">
+  <button id="startBtn">📷 Start Camera / カメラ起動</button>
+  <select id="facing">
+    <option value="environment" selected>Back / 背面</option>
+    <option value="user">Front / 前側</option>
+  </select>
+  <button id="modeBtn">🦶 Barefoot / 裸足</button>
+  <button id="hudBtn" title="HUD表示切替">H</button>
+  <button id="copyHudBtn" title="HUDログコピー">HP</button>
+  <button id="csvBtn">CSV / CSV一括出力</button>
+  <div id="hud"></div>
+</div>
+<div id="status" aria-live="polite"></div>
+<div id="extraArea">
+  <div id="extraControls">
+    <button id="plotBtn">診察時グラフ化</button>
+    <button id="distanceBtn">東海道換算</button>
+    <label for="startPointSelect">出発点:</label>
+    <select id="startPointSelect">
+      <option value="nihonbashi">日本橋起点</option>
+      <option value="sanjo">三条大橋起点</option>
+    </select>
+  </div>
+  <canvas id="historyChart" width="320" height="180" aria-label="過去7日間の実施回数"></canvas>
+  <div id="graphMessage"></div>
+  <div id="distanceMessage"></div>
+</div>
+<details id="historyEditor">
+  <summary>
+    <span>CSV/履歴を手動で調整</span>
+    <button id="historyEditorApplyInline" type="button">反映</button>
+  </summary>
+  <textarea id="historyEditorArea" aria-label="日別記録をカンマ区切りで編集"></textarea>
+  <div class="editorActions">
+    <button id="historyEditorApply">履歴に反映</button>
+    <span>1行目はヘッダ「date,total,barefoot,socks」を維持してください。</span>
+  </div>
+</details>
+
+<!-- ===== SCREEN 1: REPETITIONS ===== -->
+<div id="screen-reps" class="result-screen">
+  <div class="result-header">
+    <button class="result-back" id="reps-back">×</button>
+    <span class="result-title">Repetitions</span>
+  </div>
+  <div class="reps-body">
+    <div class="gauge-foot-wrap">
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 220 220">
+          <circle cx="110" cy="110" r="90" fill="none" stroke="#e8e8e8" stroke-width="14"/>
+          <circle id="gauge-arc" cx="110" cy="110" r="90" fill="none"
+            stroke="#2d6a4f" stroke-width="14" stroke-linecap="round"
+            stroke-dasharray="565.5" stroke-dashoffset="565.5"
+            transform="rotate(150 110 110)"/>
+          <text id="gauge-count" x="110" y="100" text-anchor="middle"
+            font-size="58" font-weight="700" fill="#1a1a1a" font-family="system-ui">0</text>
+          <text id="gauge-goal" x="110" y="132" text-anchor="middle"
+            font-size="20" fill="#888" font-family="system-ui">/200</text>
+        </svg>
+      </div>
+      <div class="foot-area">
+      <svg viewBox="0 0 320 290" xmlns="http://www.w3.org/2000/svg">
+        <path fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        d="M 214.53,1.62 C 214.26,3.78 214.04,5.95 213.72,8.11 C 213.23,11.36 212.5,14.58 212.09,17.84 C 210.23,32.71 211.09,26.5 209.66,36.49 C 209.44,42.23 209.38,56.77 208.03,64.86 C 207.84,66.0 205.69,71.06 205.59,71.35 C 205.24,72.41 205.1,73.53 204.78,74.59 C 204.29,76.23 203.7,77.84 203.16,79.46 L 201.53,84.32 L 200.72,86.76 L 199.91,89.19 C 199.63,91.62 199.5,94.07 199.09,96.49 C 198.95,97.33 198.49,98.09 198.28,98.92 C 197.94,100.26 197.8,101.64 197.47,102.97 C 197.26,103.8 196.84,104.57 196.65,105.41 C 194.75,113.97 196.86,107.23 195.03,112.7 C 192.92,127.42 195.84,105.84 193.4,133.78 C 193.31,134.89 192.81,135.93 192.59,137.03 C 192.27,138.64 192.1,140.28 191.78,141.89 C 191.56,142.98 191.21,144.05 190.97,145.14 C 190.13,148.9 190.33,148.97 189.34,152.43 C 189.11,153.25 188.78,154.05 188.53,154.86 C 187.7,157.56 186.87,160.26 186.09,162.97 C 185.78,164.04 185.72,165.19 185.28,166.22 C 184.89,167.11 184.05,167.76 183.65,168.65 C 179.78,177.33 184.08,170.44 180.4,175.95 C 180.13,176.76 179.82,177.56 179.59,178.38 C 179.28,179.45 179.28,180.62 178.78,181.62 C 177.9,183.36 176.61,184.86 175.53,186.49 C 174.98,187.3 174.85,188.68 173.9,188.92 L 170.65,189.73 C 165.77,189.46 160.87,189.48 156.02,188.92 C 153.8,188.66 151.69,187.84 149.52,187.3 L 146.27,186.49 C 145.44,186.28 144.66,185.9 143.83,185.68 C 141.68,185.09 139.45,184.76 137.33,184.05 C 130.89,181.91 134.15,182.71 127.58,181.62 C 118.07,177.82 127.78,182.02 121.08,178.38 C 118.95,177.22 116.29,176.84 114.58,175.14 C 111.35,171.91 113.26,172.98 108.89,171.89 C 106.72,170.81 104.77,169.12 102.39,168.65 C 101.04,168.38 99.67,168.17 98.33,167.84 C 97.5,167.63 96.72,167.23 95.89,167.03 C 94.55,166.69 93.17,166.55 91.83,166.22 C 90.13,165.79 86.57,164.28 85.33,163.78 C 72.67,151.15 86.89,164.81 78.82,158.11 C 77.94,157.37 77.27,156.41 76.39,155.68 C 71.78,151.85 76.26,156.4 70.7,152.43 C 63.88,147.57 75.07,151.37 60.95,144.32 C 53.08,140.4 62.66,145.61 54.45,139.46 C 53.48,138.73 52.25,138.44 51.2,137.84 C 50.35,137.35 49.57,136.76 48.76,136.22 C 46.85,130.51 49.33,137.55 46.32,130.54 C 45.98,129.75 45.89,128.87 45.51,128.11 C 45.07,127.24 44.32,126.55 43.88,125.68 C 42.02,121.96 44.59,124.1 40.63,120.81 C 39.88,120.19 39.09,119.58 38.19,119.19 C 36.63,118.49 33.32,117.57 33.32,117.57 C 31.42,117.84 29.38,117.6 27.63,118.38 C 26.74,118.77 26.69,120.12 26.0,120.81 C 25.31,121.5 24.38,121.89 23.57,122.43 C 23.3,123.24 23.14,124.1 22.75,124.86 C 19.6,131.15 22.36,123.62 20.32,129.73 C 20.61,131.82 20.81,135.57 21.94,137.84 C 22.38,138.71 23.02,139.46 23.57,140.27 C 23.84,141.08 24.0,141.94 24.38,142.7 C 24.82,143.57 26.2,144.18 26.0,145.14 C 25.81,146.09 24.38,146.22 23.57,146.76 C 19.19,145.67 17.73,144.91 12.19,146.76 C 11.26,147.06 11.11,148.38 10.56,149.19 C 10.29,150.0 9.75,150.77 9.75,151.62 C 9.75,153.53 9.79,155.55 10.56,157.3 C 11.23,158.79 14.26,159.14 15.44,159.73 C 16.31,160.17 17.07,160.81 17.88,161.35 C 16.33,161.66 13.04,162.14 11.38,162.97 C 10.5,163.41 9.69,163.97 8.94,164.59 C 8.06,165.33 7.31,166.22 6.5,167.03 C 6.77,169.46 6.54,172.0 7.31,174.32 C 7.68,175.41 8.87,176.02 9.75,176.76 C 11.85,178.5 12.18,178.38 14.63,179.19 C 12.46,179.73 9.98,179.57 8.13,180.81 L 3.25,184.05 C 2.98,184.86 2.82,185.72 2.44,186.49 C -0.71,192.77 2.04,185.24 0.0,191.35 C 0.81,191.89 1.55,192.58 2.44,192.97 C 4.0,193.67 7.31,194.59 7.31,194.59 C 10.83,194.32 14.35,193.78 17.88,193.78 C 18.73,193.78 16.21,194.21 15.44,194.59 C 14.57,195.03 13.81,195.68 13.0,196.22 C 12.46,197.03 11.81,197.78 11.38,198.65 C 10.65,200.09 9.93,202.07 11.38,203.51 C 11.98,204.12 12.98,204.12 13.81,204.32 C 16.09,204.89 20.58,205.58 22.75,205.95 C 23.57,206.22 24.43,206.37 25.19,206.76 C 26.06,207.19 26.74,207.98 27.63,208.38 C 29.19,209.07 32.5,210.0 32.5,210.0 C 37.42,213.27 32.5,210.52 41.44,212.43 C 51.55,214.59 42.44,212.97 48.76,215.68 C 49.78,216.11 50.95,216.13 52.01,216.49 C 55.7,217.71 55.37,218.07 58.51,218.92 C 60.66,219.51 62.89,219.84 65.01,220.54 C 66.64,221.08 68.22,221.75 69.89,222.16 C 73.14,222.97 76.64,223.1 79.64,224.59 C 81.8,225.68 84.12,226.5 86.14,227.84 L 93.45,232.7 C 94.26,233.24 95.02,233.89 95.89,234.32 C 96.97,234.86 98.09,235.35 99.14,235.95 C 99.99,236.43 100.69,237.17 101.58,237.57 C 109.19,240.94 105.65,237.41 116.2,241.62 C 118.6,242.58 125.47,245.19 126.77,246.49 C 127.58,247.3 128.3,248.21 129.21,248.92 C 134.71,253.19 132.57,251.07 137.33,253.78 C 138.18,254.27 138.9,254.97 139.77,255.41 C 140.54,255.79 141.44,255.83 142.21,256.22 C 143.62,256.92 144.83,258.0 146.27,258.65 C 147.83,259.36 151.15,260.27 151.15,260.27 C 151.96,260.81 152.71,261.46 153.59,261.89 C 155.56,262.88 158.05,262.96 160.09,263.51 C 161.74,263.96 163.34,264.59 164.96,265.14 C 165.77,265.41 166.57,265.74 167.4,265.95 L 170.65,266.76 C 171.46,266.49 172.23,265.95 173.09,265.95 C 173.95,265.95 174.7,266.52 175.53,266.76 C 176.6,267.06 177.71,267.25 178.78,267.57 C 180.42,268.06 182.03,268.65 183.65,269.19 L 186.09,270.0 C 188.53,269.73 191.0,269.67 193.4,269.19 C 195.08,268.85 196.65,268.11 198.28,267.57 L 200.72,266.76 C 204.18,264.45 205.35,263.39 208.84,261.89 C 209.63,261.56 210.47,261.35 211.28,261.08 C 211.55,260.27 211.68,259.4 212.09,258.65 C 213.04,256.94 214.73,255.63 215.34,253.78 C 216.51,250.29 215.95,252.18 216.97,248.11 C 217.4,234.45 216.44,228.05 218.6,217.3 C 219.11,214.75 219.45,213.94 220.22,211.62 C 220.49,206.49 220.34,201.31 221.03,196.22 C 221.17,195.25 222.22,194.66 222.66,193.78 C 223.04,193.02 223.09,192.12 223.47,191.35 C 223.91,190.48 224.63,189.77 225.1,188.92 C 226.26,186.8 227.58,184.73 228.35,182.43 L 229.97,177.57 C 230.24,176.76 230.31,175.85 230.78,175.14 L 232.41,172.7 C 235.37,163.83 230.65,177.27 234.85,167.84 C 235.54,166.28 235.93,164.59 236.47,162.97 C 236.83,161.92 236.85,160.75 237.29,159.73 C 237.67,158.83 238.37,158.11 238.91,157.3 C 240.65,152.08 238.36,157.75 242.16,152.43 C 242.87,151.45 243.16,150.23 243.79,149.19 C 244.79,147.52 247.04,144.32 247.04,144.32 C 250.0,135.45 245.27,148.89 249.47,139.46 C 250.17,137.9 250.56,136.22 251.1,134.59 C 251.37,133.78 251.71,132.99 251.91,132.16 C 252.18,131.08 252.11,129.85 252.73,128.92 C 253.27,128.11 254.35,127.84 255.16,127.3 C 259.5,120.81 253.81,128.65 259.23,123.24 C 259.92,122.55 260.23,121.56 260.85,120.81 C 261.59,119.93 262.48,119.19 263.29,118.38 C 265.22,112.59 263.96,114.94 266.54,111.08 C 269.08,100.95 265.83,113.55 268.17,105.41 C 268.47,104.33 268.66,103.23 268.98,102.16 C 269.47,100.52 270.06,98.92 270.6,97.3 C 270.87,96.49 271.21,95.69 271.42,94.86 C 271.69,93.78 271.99,92.71 272.23,91.62 C 272.6,89.96 272.98,86.87 273.85,85.14 C 274.56,83.73 275.59,82.49 276.29,81.08 C 276.67,80.32 276.69,79.4 277.1,78.65 C 278.05,76.94 279.27,75.41 280.35,73.78 L 281.98,71.35 C 282.52,70.54 282.91,69.61 283.61,68.92 L 286.04,66.49 L 287.67,61.62 C 287.94,60.81 288.01,59.9 288.48,59.19 L 290.11,56.76 C 290.38,55.95 290.73,55.16 290.92,54.32 C 292.92,45.34 291.54,39.05 292.54,28.38 C 292.91,24.44 296.26,20.49 297.42,17.03 C 300.89,6.65 299.86,12.29 299.86,0.0"/>
+      </svg>
+      </div><!-- /foot-area -->
+    </div><!-- /gauge-foot-wrap -->
+    <div class="keep-going" id="reps-message">Keep going!</div>
+  </div><!-- /reps-body -->
+  <div class="result-footer">
+    <button class="next-btn" id="reps-next">Next →</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN 2: HISTORY CALENDAR ===== -->
+<div id="screen-cal" class="result-screen">
+  <div class="result-header">
+    <button class="result-back" id="cal-back">‹</button>
+    <span class="result-title">History</span>
+  </div>
+  <div class="cal-body">
+    <div class="cal-month" id="cal-month-label"></div>
+    <table class="cal-grid" id="cal-table">
+      <thead>
+        <tr>
+          <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
+        </tr>
+      </thead>
+      <tbody id="cal-tbody"></tbody>
+    </table>
+    <div class="cal-summary">
+      <div class="cal-summary-row">
+        <span class="cal-summary-label">Total</span>
+        <span><span class="cal-summary-val" id="cal-total">0</span><span class="cal-summary-unit">reps</span></span>
+      </div>
+      <div class="cal-summary-row">
+        <span class="cal-summary-label"></span>
+        <span><span class="cal-summary-val" id="cal-days">0</span><span class="cal-summary-unit">days</span></span>
+      </div>
+    </div>
+  </div>
+  <div class="result-footer">
+    <button class="next-btn" id="cal-next">Next →</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN 3: TOKAIDO ===== -->
+<div id="screen-tokaido" class="result-screen">
+  <div class="result-header">
+    <button class="result-back" id="tk-back">‹</button>
+    <span class="result-title">Tokaido 53 Stations</span>
+  </div>
+  <div class="tk-body">
+    <div class="tk-progress-row">
+      <span class="tk-progress-label">Progress</span>
+      <span>
+        <span class="tk-progress-val" id="tk-station-num">0</span>
+        <span class="tk-progress-denom"> /53</span>
+      </span>
+    </div>
+    <div class="tk-img-wrap">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Great_Wave_off_Kanagawa2.jpg/800px-Great_Wave_off_Kanagawa2.jpg"
+           alt="富嶽三十六景 - 神奈川沖浪裏"
+           onerror="this.style.display='none'"/>
+    </div>
+    <div class="tk-route-row">
+      <span class="tk-route-label">日本橋</span>
+      <div class="tk-route-bar-wrap">
+        <div class="tk-route-bar-fill" id="tk-bar" style="width:0%"></div>
+      </div>
+      <span class="tk-route-label">京都</span>
+    </div>
+    <div class="tk-station-name" id="tk-station-name"></div>
+    <div class="tk-distance-text" id="tk-distance-text"></div>
+  </div>
+  <div class="result-footer">
+    <button class="close-btn" id="tk-close">完了 / Done</button>
+  </div>
+</div>
+
+<script>
+
+/* ===== 基本DOM ===== */
+const video = document.getElementById("video");
+const countNow = document.getElementById("countNow");
+const hud = document.getElementById("hud");
+const status = document.getElementById("status");
+const intro = document.getElementById("intro");
+const extraArea = document.getElementById("extraArea");
+
+/* ===== モード管理 ===== */
+let socksMode = false;
+function logModeChange(){
+  const label = socksMode ? "🧦 Socks / 靴下" : "🦶 Barefoot / 裸足";
+  logs.push(`=== MODE CHANGE: ${label} ===`);
+}
+
+/* ===== モデル・状態 ===== */
+let model=null, stream=null, running=false;
+let lastFootY=null, lastEventTime=0, lastSign=null, armed=false;
+let sessionCount=0, logs=[];
+let sessionModeCounts={barefoot:0,socks:0};
+let starTimes=[];
+
+const MAX_LOGS=300;
+
+/* ---- tuning（裸足基準・温存） ---- */
+const THRESH_ON=6;
+const THRESH_OFF=3;
+const LOCK_MS=800;
+const JUMP_CUT=120;
+
+/* ---- 靴下モード補正 ---- */
+function getThresholds(){
+  if(socksMode){
+    return { THRESH_ON:10, THRESH_OFF:5, JUMP_CUT:180 };
+  }
+  return { THRESH_ON, THRESH_OFF, JUMP_CUT };
+}
+
+/* ---- daily storage ---- */
+const todayKey = new Date().toISOString().slice(0,10);
+const rawHistory = JSON.parse(localStorage.getItem("ankleHistory")||"{}");
+const history = {};
+for(const [day, record] of Object.entries(rawHistory)){
+  history[day] = normalizeRecord(record);
+}
+
+function normalizeRecord(record){
+  if(typeof record==="number"){
+    return {total:record,barefoot:0,socks:0};
+  }
+  return {
+    total: record?.total || 0,
+    barefoot: record?.barefoot || 0,
+    socks: record?.socks || 0
+  };
+}
+
+/* ===== TOKAIDO DATA ===== */
+const tokaidoStations = [
+  {name:"Nihonbashi (日本橋)", distance:0},
+  {name:"Shinagawa-juku (品川宿)", distance:7.9},
+  {name:"Kawasaki-juku (川崎宿)", distance:17.7},
+  {name:"Kanagawa-juku (神奈川宿)", distance:27.5},
+  {name:"Hodogaya-juku (程ヶ谷宿)", distance:32.4},
+  {name:"Totsuka-juku (戸塚宿)", distance:41.2},
+  {name:"Fujisawa-shuku (藤沢宿)", distance:49.1},
+  {name:"Hiratsuka-juku (平塚宿)", distance:62.8},
+  {name:"Ōiso-juku (大磯宿)", distance:65.8},
+  {name:"Odawara-juku (小田原宿)", distance:81.5},
+  {name:"Hakone-juku (箱根宿)", distance:98.1},
+  {name:"Mishima-shuku (三島宿)", distance:112.9},
+  {name:"Numazu-juku (沼津宿)", distance:118.8},
+  {name:"Hara-juku (原宿)", distance:124.7},
+  {name:"Yoshiwara-juku (吉原宿)", distance:136.5},
+  {name:"Kanbara-juku (蒲原宿)", distance:147.7},
+  {name:"Yui-shuku (由比宿)", distance:151.6},
+  {name:"Okitsu-juku (興津宿)", distance:160.8},
+  {name:"Ejiri-juku (江尻宿)", distance:164.9},
+  {name:"Fuchū-shuku (府中宿)", distance:175.5},
+  {name:"Mariko-juku (鞠子宿)", distance:181.2},
+  {name:"Okabe-juku (岡部宿)", distance:189.0},
+  {name:"Fujieda-juku (藤枝宿)", distance:195.8},
+  {name:"Shimada-juku (島田宿)", distance:204.5},
+  {name:"Kanaya-juku (金谷宿)", distance:208.4},
+  {name:"Nissaka-shuku (日坂宿)", distance:215.0},
+  {name:"Kakegawa-juku (掛川宿)", distance:222.1},
+  {name:"Fukuroi-juku (袋井宿)", distance:231.7},
+  {name:"Mitsuke-juku (見附宿)", distance:237.6},
+  {name:"Hamamatsu-juku (浜松宿)", distance:254.0},
+  {name:"Maisaka-juku (舞阪宿)", distance:265.0},
+  {name:"Arai-juku (新居宿)", distance:270.8},
+  {name:"Shirasuka-juku (白須賀宿)", distance:277.4},
+  {name:"Futagawa-juku (二川宿)", distance:283.2},
+  {name:"Yoshida-juku (吉田宿)", distance:289.3},
+  {name:"Goyu-shuku (御油宿)", distance:299.5},
+  {name:"Akasaka-juku (赤坂宿)", distance:301.3},
+  {name:"Fujikawa-shuku (藤川宿)", distance:310.1},
+  {name:"Okazaki-shuku (岡崎宿)", distance:316.8},
+  {name:"Chiryū-juku (池鯉鮒宿)", distance:331.8},
+  {name:"Narumi-juku (鳴海宿)", distance:342.9},
+  {name:"Miya-juku (宮宿)", distance:349.4},
+  {name:"Kuwana-juku (桑名宿)", distance:376.9},
+  {name:"Yokkaichi-juku (四日市宿)", distance:389.6},
+  {name:"Ishiyakushi-juku (石薬師宿)", distance:400.4},
+  {name:"Shōno-juku (庄野宿)", distance:403.1},
+  {name:"Kameyama-juku (亀山宿)", distance:411.0},
+  {name:"Seki-juku (関宿)", distance:416.9},
+  {name:"Sakashita-juku (坂下宿)", distance:423.4},
+  {name:"Tsuchiyama-juku (土山宿)", distance:433.2},
+  {name:"Minakuchi-juku (水口宿)", distance:443.8},
+  {name:"Ishibe-juku (石部宿)", distance:457.5},
+  {name:"Kusatsu-juku (草津宿)", distance:469.3},
+  {name:"Ōtsu-juku (大津宿)", distance:483.7},
+  {name:"Sanjō Ōhashi (三条大橋)", distance:495.5}
+];
+const totalRouteKm = 495.5;
+
+function getCombinedHistory(){
+  const combined = {};
+  for(const [day, record] of Object.entries(history)){
+    combined[day] = { total:record.total, barefoot:record.barefoot, socks:record.socks };
+  }
+  return combined;
+}
+
+/* ===== Camera ===== */
+async function startCamera(){
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode: document.getElementById("facing").value }
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+}
+function stopCamera(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+
+/* ===== RESULT SCREEN LOGIC ===== */
+function showScreen(id){
+  document.querySelectorAll('.result-screen').forEach(s=>s.style.display='none');
+  if(id) document.getElementById(id).style.display='block';
+}
+
+const DAILY_GOAL = 200;
+
+function openRepsScreen(count){
+  /* gauge */
+  const pct = Math.min(count / DAILY_GOAL, 1);
+  const circ = 565.5;
+  const arc = document.getElementById('gauge-arc');
+  arc.style.strokeDashoffset = circ * (1 - pct);
+  document.getElementById('gauge-count').textContent = count;
+  document.getElementById('gauge-goal').textContent = '/' + DAILY_GOAL;
+
+  /* message */
+  let msg = 'Keep going!';
+  if(count === 0) msg = 'Let\'s start!';
+  else if(count >= DAILY_GOAL) msg = 'Goal reached! 🎉';
+  else if(pct >= 0.5) msg = 'Halfway there!';
+  document.getElementById('reps-message').textContent = msg;
+
+  showScreen('screen-reps');
+}
+
+function openCalScreen(){
+  const combined = getCombinedHistory();
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  /* month label */
+  const monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+  document.getElementById('cal-month-label').textContent =
+    monthNames[month] + ' ' + year;
+
+  /* build calendar */
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  // convert Sunday=0 to Mon-based: Mon=0..Sun=6
+  const startOffset = (firstDay + 6) % 7;
+
+  const tbody = document.getElementById('cal-tbody');
+  tbody.innerHTML = '';
+  let cells = [];
+  for(let i=0; i<startOffset; i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  while(cells.length % 7 !== 0) cells.push(null);
+
+  for(let r=0; r<cells.length/7; r++){
+    const tr = document.createElement('tr');
+    for(let c=0; c<7; c++){
+      const td = document.createElement('td');
+      const day = cells[r*7+c];
+      if(day){
+        const dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+        const rec = combined[dateStr];
+        const isToday = dateStr === todayKey;
+        if(rec && rec.total > 0){
+          const span = document.createElement('span');
+          span.className = isToday ? 'cal-today-dot' : 'cal-dot';
+          span.textContent = day;
+          td.appendChild(span);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'cal-empty';
+          span.textContent = day;
+          td.appendChild(span);
+        }
+      }
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+
+  /* totals */
+  const days = Object.keys(combined);
+  const totalReps = days.reduce((s,d)=>s+combined[d].total,0);
+  const activeDays = days.filter(d=>combined[d].total>0).length;
+  document.getElementById('cal-total').textContent = totalReps.toLocaleString();
+  document.getElementById('cal-days').textContent = activeDays;
+
+  showScreen('screen-cal');
+}
+
+function openTokaidoScreen(){
+  const combined = getCombinedHistory();
+  const days = Object.keys(combined);
+  const totalCounts = days.reduce((s,d)=>s+combined[d].total,0);
+  const distanceKm = (totalCounts * 0.9) / 1000;
+  const pct = Math.min(distanceKm / totalRouteKm, 1);
+
+  /* progress bar */
+  document.getElementById('tk-bar').style.width = (pct*100).toFixed(1)+'%';
+
+  /* find current station */
+  let stationIdx = 0;
+  for(let i=0; i<tokaidoStations.length; i++){
+    if(distanceKm >= tokaidoStations[i].distance) stationIdx = i;
+    else break;
+  }
+  const station = tokaidoStations[stationIdx];
+  document.getElementById('tk-station-num').textContent = stationIdx;
+  document.getElementById('tk-station-name').textContent = station.name;
+
+  /* next station gap */
+  let distText = `累計 ${totalCounts.toLocaleString()} 回 → ${distanceKm.toFixed(2)} km`;
+  if(stationIdx < tokaidoStations.length - 1){
+    const next = tokaidoStations[stationIdx+1];
+    const gap = (next.distance - distanceKm).toFixed(2);
+    distText += `\nあと ${gap} km で ${next.name}`;
+  } else {
+    distText += '\n🎊 三条大橋に到達しました！';
+  }
+  document.getElementById('tk-distance-text').textContent = distText;
+
+  showScreen('screen-tokaido');
+}
+
+/* ===== BUTTON WIRING ===== */
+document.getElementById('reps-back').onclick = ()=>{
+  showScreen(null);
+};
+document.getElementById('reps-next').onclick = ()=> openCalScreen();
+document.getElementById('cal-back').onclick  = ()=> openRepsScreen(sessionCount);
+document.getElementById('cal-next').onclick  = ()=> openTokaidoScreen();
+document.getElementById('tk-back').onclick   = ()=> openCalScreen();
+document.getElementById('tk-close').onclick  = ()=>{
+  showScreen(null);
+  if(intro) intro.style.display='block';
+  if(extraArea) extraArea.style.display='block';
+};
+
+/* ===== START/STOP ===== */
+document.getElementById("startBtn").onclick = async()=>{
+  if(!running){
+    if(!model) model = await cocoSsd.load();
+    await startCamera();
+    running=true;
+    sessionCount=0;
+    sessionModeCounts={barefoot:0,socks:0};
+    starTimes=[];
+    countNow.textContent="Now: 0 / 現在: 0";
+    if(intro) intro.style.display="none";
+    if(extraArea) extraArea.style.display="none";
+    if(overlay) overlay.style.display="none";
+    if(graphMessage) graphMessage.textContent="";
+    if(distanceMessage) distanceMessage.textContent="";
+    logs.push("=== SESSION START ===");
+    logModeChange();
+    detectLoop();
+    document.getElementById("startBtn").textContent="⏹ Stop / 停止";
+  }else{
+    running=false;
+    stopCamera();
+    const todayRecord = history[todayKey] || {total:0,barefoot:0,socks:0};
+    todayRecord.total += sessionCount;
+    todayRecord.barefoot += sessionModeCounts.barefoot;
+    todayRecord.socks += sessionModeCounts.socks;
+    history[todayKey] = todayRecord;
+    localStorage.setItem("ankleHistory",JSON.stringify(history));
+    logs.push("=== SESSION END ===");
+    document.getElementById("startBtn").textContent="📷 Start Camera / カメラ起動";
+    /* → 結果画面① へ */
+    openRepsScreen(sessionCount);
+  }
+};
+
+document.getElementById("hudBtn").onclick=()=>{
+  hud.style.display = hud.style.display==="none"?"block":"none";
+};
+
+document.getElementById("copyHudBtn").onclick=async()=>{
+  try{
+    await navigator.clipboard.writeText(logs.join("\n"));
+    logs.push("[HUD LOG COPIED]");
+    hud.textContent=logs.join("\n");
+  }catch(e){
+    logs.push("[HUD COPY FAILED]");
+  }
+};
+
+document.getElementById("modeBtn").onclick=()=>{
+  socksMode=!socksMode;
+  document.getElementById("modeBtn").textContent =
+    socksMode ? "🧦 Socks / 靴下" : "🦶 Barefoot / 裸足";
+  logModeChange();
+};
+
+const chartCanvas = document.getElementById("historyChart");
+const chartCtx = chartCanvas.getContext("2d");
+const graphMessage = document.getElementById("graphMessage");
+const distanceMessage = document.getElementById("distanceMessage");
+const startPointSelect = document.getElementById("startPointSelect");
+const overlay = document.getElementById("overlay");
+const historyEditor = document.getElementById("historyEditor");
+const historyEditorArea = document.getElementById("historyEditorArea");
+const historyEditorApply = document.getElementById("historyEditorApply");
+const historyEditorApplyInline = document.getElementById("historyEditorApplyInline");
+document.getElementById("plotBtn").onclick=renderHistoryChart;
+document.getElementById("distanceBtn").onclick=renderTokaidoSummary;
+if(historyEditor){
+  historyEditor.addEventListener("toggle",()=>{
+    if(historyEditor.open){ refreshHistoryEditor(); }
+  });
+}
+if(historyEditorApply){
+  historyEditorApply.addEventListener("click",(e)=>{ e.preventDefault(); applyHistoryEditor(); });
+}
+if(historyEditorApplyInline){
+  historyEditorApplyInline.addEventListener("click",(e)=>{ e.preventDefault(); applyHistoryEditor(); });
+}
+
+/* ===== CSV ===== */
+document.getElementById("csvBtn").onclick=()=>{
+  status.textContent="CSV出力を準備しています…";
+  const csvTimeout = setTimeout(()=>{
+    status.textContent="CSV出力に時間がかかっています。保存制限やメモリが不足している端末では、紙に日付と回数を書いて次回受診にお持ちください。";
+  },15000);
+  const exportHistory = getCombinedHistory();
+  const rows = ["date,total,barefoot,socks"];
+  const sortedDays = Object.keys(exportHistory).sort();
+  for(const day of sortedDays){
+    const record = exportHistory[day];
+    rows.push(`${day},${record.total},${record.barefoot},${record.socks}`);
+  }
+  const csv = rows.join("\n");
+  const dateStr = todayKey.replace(/-/g,"");
+  const filename=`AnkleDorsiPlantarCounter_${dateStr}_summary.csv`;
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  try{
+    a.click();
+    status.textContent="CSV（まとめ）を端末に保存しました。";
+  }catch(e){
+    status.textContent="CSV出力がブロックされました。紙のメモをご利用ください。";
+  }finally{
+    clearTimeout(csvTimeout);
+  }
+};
+
+/* ===== CHART ===== */
+function renderHistoryChart(){
+  if(!chartCtx) return;
+  const combined = getCombinedHistory();
+  const days = Object.keys(combined).sort();
+  if(days.length===0){
+    chartCtx.clearRect(0,0,chartCanvas.width,chartCanvas.height);
+    graphMessage.textContent="まだ記録がありません。";
+    return;
+  }
+  const recentDays = days.slice(-7);
+  const values = recentDays.map(day=>combined[day].total);
+  const width=chartCanvas.width, height=chartCanvas.height, padding=16;
+  const maxValue = Math.max(...values,1);
+  chartCtx.clearRect(0,0,width,height);
+  chartCtx.fillStyle="#f6f6f6";
+  chartCtx.fillRect(0,0,width,height);
+  const barFullWidth=(width-padding*2)/recentDays.length;
+  const barWidth=Math.max(12,barFullWidth*0.7);
+  for(let i=0;i<recentDays.length;i++){
+    const val=values[i];
+    const barHeight=(height-padding*2)*(val/maxValue);
+    const x=padding+i*barFullWidth+(barFullWidth-barWidth)/2;
+    const y=height-padding-barHeight;
+    chartCtx.fillStyle="#4a90e2";
+    chartCtx.fillRect(x,y,barWidth,barHeight);
+    chartCtx.font="10px system-ui, sans-serif";
+    chartCtx.textAlign="center";
+    chartCtx.fillStyle="#333";
+    chartCtx.fillText(recentDays[i].slice(5),x+barWidth/2,height-padding+12);
+    chartCtx.fillStyle="#111";
+    chartCtx.fillText(val.toFixed(0),x+barWidth/2,y-4);
+  }
+  const avg=(values.reduce((sum,v)=>sum+v,0)/values.length).toFixed(1);
+  graphMessage.textContent=`直近${recentDays.length}日平均 ${avg}回、最新 ${recentDays[recentDays.length-1]} ${values[values.length-1]}回`;
+}
+
+/* ===== TOKAIDO SUMMARY (existing extraArea) ===== */
+function renderTokaidoSummary(){
+  const combined = getCombinedHistory();
+  const days = Object.keys(combined);
+  if(days.length===0){ distanceMessage.textContent="まだ記録がありません。"; return; }
+  const totalCounts = days.reduce((sum,day)=>sum+combined[day].total,0);
+  const distanceMeters = totalCounts*0.9;
+  const distanceKm = distanceMeters/1000;
+  const startPoint = startPointSelect.value;
+  const station = findStationForDistance(distanceKm, startPoint);
+  const startLabel = startPoint==="nihonbashi"?"日本橋":"三条大橋";
+  const avgPerDay = days.length?(totalCounts/days.length).toFixed(1):"0.0";
+  const nextInfo = getNextStationAndGap(station.index, startPoint, distanceKm);
+  const startDistanceText = `${startLabel}から約${distanceKm.toFixed(2)}kmです。`;
+  let nextText = nextInfo
+    ? `さらに${nextInfo.gap.toFixed(2)}km進むと東海道53次 ${nextInfo.index}番目の${nextInfo.name}（${nextInfo.stationDistance.toFixed(1)}km地点）に到達します。`
+    : `次の宿場がありません。`;
+  distanceMessage.textContent=`累計 ${totalCounts} 回、記録日数 ${days.length} 日、1日平均 ${avgPerDay} 回。${totalCounts}✖︎90cm=${distanceMeters.toFixed(1)}m進みました。${startDistanceText}${nextText}`;
+  if(overlay){
+    overlay.textContent=`東海道53次換算：${distanceMessage.textContent}`;
+    overlay.style.display= running?"none":"block";
+  }
+}
+
+function refreshHistoryEditor(){
+  if(!historyEditorArea) return;
+  const combined = getCombinedHistory();
+  const rows = ["date,total,barefoot,socks"];
+  Object.keys(combined).sort().forEach(day=>{
+    const r=combined[day];
+    rows.push(`${day},${r.total},${r.barefoot},${r.socks}`);
+  });
+  historyEditorArea.value=rows.join("\n");
+}
+
+function applyHistoryEditor(){
+  if(!historyEditorArea) return;
+  const lines=historyEditorArea.value.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length);
+  if(lines.length<=1) return;
+  const newHistory={};
+  for(const line of lines.slice(1)){
+    const [date,total,barefoot,socks]=line.split(",");
+    if(!date||isNaN(total)||isNaN(barefoot)||isNaN(socks)) continue;
+    newHistory[date]={total:Number(total),barefoot:Number(barefoot),socks:Number(socks)};
+  }
+  if(Object.keys(newHistory).length===0) return;
+  for(const [date,record] of Object.entries(newHistory)) history[date]=record;
+  localStorage.setItem("ankleHistory",JSON.stringify(history));
+  refreshHistoryEditor();
+  renderHistoryChart();
+  renderTokaidoSummary();
+}
+
+function findStationForDistance(distanceKm, startPoint){
+  if(distanceKm<=0) return {...tokaidoStations[0],index:0};
+  if(distanceKm>=totalRouteKm) return {...tokaidoStations[tokaidoStations.length-1],index:tokaidoStations.length-1};
+  if(startPoint==="nihonbashi"){
+    let selected=tokaidoStations[0];
+    for(let i=0;i<tokaidoStations.length;i++){
+      if(distanceKm>=tokaidoStations[i].distance) selected={...tokaidoStations[i],index:i};
+      else break;
+    }
+    return selected;
+  }
+  const targetDistance=Math.max(0,totalRouteKm-distanceKm);
+  let selected=tokaidoStations[tokaidoStations.length-1];
+  for(let i=0;i<tokaidoStations.length;i++){
+    if(targetDistance>=tokaidoStations[i].distance) selected={...tokaidoStations[i],index:i};
+    else break;
+  }
+  return selected;
+}
+
+function getNextStationAndGap(currentIndex, startPoint, distanceKm){
+  if(startPoint==="nihonbashi"){
+    if(currentIndex>=tokaidoStations.length-1) return null;
+    const nextIndex=currentIndex+1;
+    const nextStation=tokaidoStations[nextIndex];
+    return { index:nextIndex+1, name:nextStation.name, stationDistance:nextStation.distance, gap:Math.max(0,nextStation.distance-distanceKm) };
+  }
+  if(currentIndex<=0) return null;
+  const prevIndex=currentIndex-1;
+  const nextStation=tokaidoStations[prevIndex];
+  const nextDistanceFromStart=totalRouteKm-nextStation.distance;
+  return { index:prevIndex+1, name:nextStation.name, stationDistance:nextStation.distance, gap:Math.max(0,nextDistanceFromStart-distanceKm) };
+}
+
+refreshHistoryEditor();
+renderHistoryChart();
+renderTokaidoSummary();
+
+/* ===== DETECTION LOOP（アルゴリズム完全温存） ===== */
+async function detectLoop(){
+  if(!running) return;
+  if(logs.length===0){ logs.push("detectLoop running..."); hud.textContent=logs.join("\n"); }
+  const preds = await model.detect(video);
+  const p = preds.find(x=>x.class==="person");
+  if(p){
+    const footY=p.bbox[1];
+    const now=performance.now();
+    const T=getThresholds();
+    if(lastFootY!==null){
+      const dY=footY-lastFootY;
+      if(Math.abs(dY)<T.JUMP_CUT){
+        const sign=dY>0?"+":dY<0?"-":"0";
+        let mark="";
+        if(!armed && Math.abs(dY)>=T.THRESH_ON && sign!=="0") armed=true;
+        if(armed){
+          const timeOK=(now-lastEventTime)>=LOCK_MS;
+          const signOK=!lastSign||(sign!==lastSign&&sign!=="0");
+          if(timeOK && signOK && Math.abs(dY)>=T.THRESH_ON){
+            sessionCount++;
+            const modeKey=socksMode?"socks":"barefoot";
+            sessionModeCounts[modeKey]++;
+            countNow.textContent="Now: "+sessionCount+" / 現在: "+sessionCount;
+            lastEventTime=now; lastSign=sign; armed=false; mark=" ★";
+            starTimes.push(now);
+          }
+          if(Math.abs(dY)<=T.THRESH_OFF) armed=false;
+        }
+        const log=`t:${((now-lastEventTime)/1000).toFixed(1)}s  footY:${footY.toFixed(0)}  dY:${dY.toFixed(0)}  sign:${sign}${mark}`;
+        logs.push(log);
+        if(logs.length>MAX_LOGS) logs.shift();
+        hud.textContent=logs.join("\n");
+      }
+    }
+    lastFootY=footY;
+  }
+  requestAnimationFrame(detectLoop);
+}
+</script>
+
+</body>
+</html>
